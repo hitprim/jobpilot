@@ -1,50 +1,51 @@
 # jobpilot
 
-Автоматический мониторинг вакансий с AI-скорингом. Парсит hh.ru, оценивает каждую вакансию через LLM и отправляет подходящие на email или в Google Sheets.
+**Automated lead/candidate monitoring pipeline.** Scrapes listings on a schedule, scores each one against configurable criteria with an LLM, and routes only the qualifying results to email or Google Sheets - no manual board-checking, no manual triage.
 
-## Как работает
+## The manual process it eliminates
 
-Два n8n воркфлоу:
+Checking a job board every few hours, opening each posting, reading it, and deciding which ones are worth acting on. jobpilot turns that recurring manual loop into a hands-off pipeline that runs itself and only surfaces what matters.
 
-**jobpilot-settings** - форма для настройки:
+## How it works (process -> automation -> optimization -> scale)
+
+Two n8n workflows:
+
+**jobpilot-settings** - a form to configure the run (no code needed to retune):
 ```
 n8n Form (query, threshold, notify_via)
-    ↓
-Google Sheets (лист settings)
+    -> Google Sheets (settings sheet)
 ```
 
-**jobpilot** - основной поиск (каждые 6 часов):
+**jobpilot** - the main run, every 6 hours:
 ```
-Schedule → Google Sheets (читает настройки)
-    ↓
-Python сервис (парсинг hh.ru + AI скоринг)
-    ↓
-IF → есть вакансии с нужным score?
-    ↓
-Switch → email → Gmail
-              → sheets → Google Sheets
+Schedule -> Google Sheets (reads settings)
+    -> Python service (scrape + LLM scoring)
+    -> IF (any results above the score threshold?)
+    -> Switch -> email  -> Gmail
+              -> sheets -> Google Sheets
 ```
 
-## Стек
+The data source, the scoring model, and the delivery channel are all decoupled - swapping any of them is a configuration change, not a rewrite. That is the scale path: the same pipeline shape works for sales leads, candidates, listings, or any "monitor a source, score it, route the good ones" job.
 
-- n8n - оркестрация воркфлоу
-- FastAPI - Python сервис парсинга
-- BeautifulSoup - парсинг hh.ru
-- Ollama + qwen2.5:7b - AI скоринг вакансий
-- Gmail - отправка уведомлений
-- Google Sheets - хранение настроек и результатов
-- Docker Compose - n8n + FastAPI в одной команде
+## Stack
 
-## Запуск
+- **n8n** - workflow orchestration (schedule, branching, routing)
+- **FastAPI** - Python service for scraping + scoring
+- **BeautifulSoup** - listing parser
+- **LLM scoring** - Ollama + qwen2.5:7b locally; swappable for the OpenAI / Claude API with a single client change
+- **Gmail API** - notifications
+- **Google Sheets API** - settings storage and results
+- **Docker Compose** - n8n + FastAPI in one command
+
+## Run
 
 ```bash
 git clone https://github.com/hitprim/jobpilot
 cd jobpilot
-
 docker-compose up -d
 ```
 
-Ollama должна быть запущена локально с моделью qwen2.5:7b:
+Ollama must be running locally with the model pulled:
 ```bash
 ollama pull qwen2.5:7b
 ```
@@ -52,14 +53,14 @@ ollama pull qwen2.5:7b
 - n8n: `http://localhost:5678`
 - API: `http://localhost:8000/docs`
 
-Настройки поиска задаются через форму в n8n.
+Search settings are configured through the n8n form.
 
-## Структура
+## Structure
 
 ```
 jobpilot/
 ├── app/
-│   └── main.py           # FastAPI сервис парсинга + AI скоринг
+│   └── main.py           # FastAPI service: scraping + LLM scoring
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
